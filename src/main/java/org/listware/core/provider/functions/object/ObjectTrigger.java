@@ -1,21 +1,18 @@
 /* Copyright 2022 Listware */
 
-package org.listware.core.provider.functions;
+package org.listware.core.provider.functions.object;
 
 import org.apache.flink.statefun.sdk.FunctionType;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
+import org.listware.core.FunctionContext;
 import org.listware.io.utils.TypedValueDeserializer;
 import org.listware.io.utils.Constants.Namespaces;
 import org.listware.sdk.Functions;
 import org.listware.sdk.pbcmdb.Core;
-import org.listware.sdk.pbcmdb.pbqdsl.QDSL;
-import org.listware.core.FunctionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.arangodb.ArangoGraph;
-
-public class ObjectTrigger extends Arango {
+public class ObjectTrigger extends ObjectContext {
 	@SuppressWarnings("unused")
 	private static final Logger LOG = LoggerFactory.getLogger(ObjectTrigger.class);
 
@@ -23,27 +20,20 @@ public class ObjectTrigger extends Arango {
 
 	public static final FunctionType FUNCTION_TYPE = new FunctionType(Namespaces.INTERNAL, TYPE);
 
-	public ObjectTrigger(ArangoGraph graph) {
-		super(graph);
+	public ObjectTrigger() {
+		super(TYPE, TYPE);
 	}
 
 	@Override
 	public void invoke(FunctionContext functionContext) throws Exception {
 		Core.ObjectMessage message = Core.ObjectMessage.parseFrom(functionContext.getFunctionContext().getValue());
 
-		QDSL.Options options = QDSL.Options.newBuilder().setType(true).build();
+		String typeId = cmdb.getTypeId(functionContext.getFlinkContext().self().id());
+		Functions.FunctionContext pbFunctionContext = TypeTrigger.Trigger(typeId, message.getMethod());
 
-		String query = String.format("%s.objects", functionContext.getFlinkContext().self().id());
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
 
-		QDSL.Elements elements = client.qdsl(query, options);
-
-		for (QDSL.Element element : elements.getElementsList()) {
-			Functions.FunctionContext pbFunctionContext = TypeTrigger.Trigger(element.getType(), message.getMethod());
-
-			TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
-
-			functionContext.getFlinkContext().send(TypeTrigger.FUNCTION_TYPE, element.getType(), typedValue);
-		}
+		functionContext.getFlinkContext().send(TypeTrigger.FUNCTION_TYPE, pbFunctionContext.getId(), typedValue);
 	}
 
 	/**

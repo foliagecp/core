@@ -4,15 +4,20 @@ package org.listware.core.provider.functions;
 
 import org.apache.flink.statefun.sdk.Context;
 import org.apache.flink.statefun.sdk.FunctionType;
+import org.apache.flink.statefun.sdk.annotations.Persisted;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
-import org.listware.io.functions.egress.EgressReader;
+import org.apache.flink.statefun.sdk.state.PersistedTable;
+import org.listware.core.cmdb.RegisterMessage;
 import org.listware.io.utils.TypedValueDeserializer;
 import org.listware.io.utils.Constants.Namespaces;
 import org.listware.sdk.Functions;
-import org.listware.sdk.Functions.ReplyEgress;
+import org.listware.sdk.Result;
 import org.listware.sdk.pbcmdb.Core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.listware.core.provider.functions.object.Type;
+import org.listware.core.provider.functions.object.Object;
+import org.listware.core.provider.functions.object.Link;
 
 public class Register extends Base {
 	@SuppressWarnings("unused")
@@ -21,59 +26,186 @@ public class Register extends Base {
 	public static final String TYPE = "register.system.functions.root";
 	public static final FunctionType FUNCTION_TYPE = new FunctionType(Namespaces.INTERNAL, TYPE);
 
-	private EgressReader egressReader = new EgressReader(TYPE, TYPE);
+	private static final String MESSAGES_TABLE = "messages-table";
+	private static final String STATE_TABLE = "types-state-table";
+
+	@Persisted
+	private PersistedTable<String, RegisterMessage> messagesTable = PersistedTable.of(MESSAGES_TABLE, String.class,
+			RegisterMessage.class);
+
+	@Persisted
+	private PersistedTable<String, Boolean> stateTable = PersistedTable.of(STATE_TABLE, String.class, Boolean.class);
+
+	public Register() {
+		super(TYPE, TYPE);
+	}
 
 	@Override
 	public void invoke(Context context, Functions.FunctionContext functionContext) throws Exception {
 		Core.RegisterMessage registerMessage = Core.RegisterMessage.parseFrom(functionContext.getValue());
 
-		registerTypes(context, registerMessage);
+		RegisterMessage message = new RegisterMessage(registerMessage);
+		messagesTable.set(this.key, message);
 
-		registerObjects(context, registerMessage);
+		registerNext(context);
 	}
 
-	private void registerTypes(Context context, Core.RegisterMessage registerMessage) throws Exception {
-		for (Core.RegisterTypeMessage registerTypeMessage : registerMessage.getTypeMessagesList()) {
+	private void registerRouter(Context context, Functions.FunctionContext.Builder builder) throws Exception {
+		Result.ReplyResult replyResult = replyResult(context);
+		stateTable.set(replyResult.getKey(), true);
 
-			Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
-					.setType(Type.TYPE).build();
+		Functions.FunctionContext functionContext = builder.build();
 
-			ReplyEgress replyEgress = egressReader.replyEgress();
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
+				.setType(Router.TYPE).build();
 
-			Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder()
-					.setReplyEgress(replyEgress).setId(registerTypeMessage.getId()).setFunctionType(functionType)
-					.setValue(registerTypeMessage.getTypeMessage().toByteString());
+		Functions.FunctionContext routerFunctionContext = Functions.FunctionContext.newBuilder()
+				.setReplyResult(replyResult).setId(functionContext.getId()).setFunctionType(functionType)
+				.setValue(functionContext.toByteString()).build();
 
-			Functions.FunctionContext newFunctionContext = builder.build();
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(routerFunctionContext);
 
-			TypedValue newTypedValue = TypedValueDeserializer.fromMessageLite(newFunctionContext);
+		context.send(Router.FUNCTION_TYPE, routerFunctionContext.getId(), typedValue);
+	}
 
-			context.send(Type.FUNCTION_TYPE, newFunctionContext.getId(), newTypedValue);
+	private void registerBuilder(Context context, FunctionType functionType, Functions.FunctionContext.Builder builder)
+			throws Exception {
+		Result.ReplyResult replyResult = replyResult(context);
+		stateTable.set(replyResult.getKey(), true);
 
-			egressReader.wait(replyEgress.getId());
+		Functions.FunctionContext functionContext = builder.setReplyResult(replyResult).build();
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(functionContext);
+
+		context.send(functionType, functionContext.getId(), typedValue);
+	}
+
+	private void registerType(Context context, Core.RegisterTypeMessage message) throws Exception {
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
+				.setType(Type.TYPE).build();
+
+		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setId(message.getId())
+				.setFunctionType(functionType).setValue(message.getTypeMessage().toByteString());
+
+		if (message.getRouter()) {
+			registerRouter(context, builder);
+		} else {
+			registerBuilder(context, Type.FUNCTION_TYPE, builder);
+		}
+
+	}
+
+	private void registerObject(Context context, Core.RegisterObjectMessage message) throws Exception {
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
+				.setType(Object.TYPE).build();
+
+		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setId(message.getId())
+				.setFunctionType(functionType).setValue(message.getObjectMessage().toByteString());
+
+		if (message.getRouter()) {
+			registerRouter(context, builder);
+		} else {
+			registerBuilder(context, Object.FUNCTION_TYPE, builder);
 		}
 	}
 
-	private void registerObjects(Context context, Core.RegisterMessage registerMessage) throws Exception {
-		for (Core.RegisterObjectMessage registerObjectMessage : registerMessage.getObjectMessagesList()) {
+	private void registerLink(Context context, Core.RegisterLinkMessage message) throws Exception {
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
+				.setType(Object.TYPE).build();
 
-			Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
-					.setType(Object.TYPE).build();
+		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setId(message.getId())
+				.setFunctionType(functionType).setValue(message.getLinkMessage().toByteString());
 
-			ReplyEgress replyEgress = egressReader.replyEgress();
+		registerBuilder(context, Link.FUNCTION_TYPE, builder);
+	}
 
-			Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder()
-					.setFunctionType(functionType).setId(registerObjectMessage.getId()).setReplyEgress(replyEgress)
-					.setValue(registerObjectMessage.getObjectMessage().toByteString());
+	@Override
+	protected void onResult(Context context, Result.FunctionResult functionResult) throws Exception {
+		super.onResult(context, functionResult);
 
-			Functions.FunctionContext newFunctionContext = builder.build();
+		String key = functionResult.getReplyEgress().getKey();
 
-			TypedValue newTypedValue = TypedValueDeserializer.fromMessageLite(newFunctionContext);
+		stateTable.remove(key);
 
-			context.send(Object.FUNCTION_TYPE, newFunctionContext.getId(), newTypedValue);
+		registerNext(context);
+	}
 
-			egressReader.wait(replyEgress.getId());
+	@Override
+	protected void onReply(Context context) throws Exception {
+		RegisterMessage message = messagesTable.get(this.key);
+
+		// wait all answers
+		if (stateTable.keys().iterator().hasNext()) {
+			return;
 		}
+
+		// if errors - reply answer
+		if (errorContainer.getComplete()) {
+			if (!message.getTypes().isEmpty()) {
+				return;
+			}
+
+			if (!message.getObjects().isEmpty()) {
+				return;
+			}
+
+			if (!message.getLinks().isEmpty()) {
+				return;
+			}
+		}
+
+		messagesTable.remove(this.key);
+		super.onReply(context);
+	}
+
+	private void registerTypes(Context context) throws Exception {
+		RegisterMessage message = messagesTable.get(this.key);
+
+		for (Core.RegisterTypeMessage registerMessage : message.listTypes()) {
+			registerType(context, registerMessage);
+		}
+
+		messagesTable.set(this.key, message);
+	}
+
+	private void registerObjects(Context context) throws Exception {
+		RegisterMessage message = messagesTable.get(this.key);
+
+		for (Core.RegisterObjectMessage registerMessage : message.listObjects()) {
+			registerObject(context, registerMessage);
+		}
+
+		messagesTable.set(this.key, message);
+	}
+
+	private void registerLinks(Context context) throws Exception {
+		RegisterMessage message = messagesTable.get(this.key);
+
+		for (Core.RegisterLinkMessage registerMessage : message.listLinks()) {
+			registerLink(context, registerMessage);
+		}
+
+		messagesTable.set(this.key, message);
+	}
+
+	private void registerNext(Context context) throws Exception {
+		RegisterMessage message = messagesTable.get(this.key);
+
+		if (stateTable.keys().iterator().hasNext()) {
+			return;
+		}
+
+		if (!errorContainer.getComplete()) {
+			return;
+		}
+
+		if (!message.getTypes().isEmpty()) {
+			registerTypes(context);
+		} else if (!message.getObjects().isEmpty()) {
+			registerObjects(context);
+		} else if (!message.getLinks().isEmpty()) {
+			registerLinks(context);
+		}
+
 	}
 
 }

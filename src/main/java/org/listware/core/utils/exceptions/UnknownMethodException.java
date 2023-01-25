@@ -1,6 +1,6 @@
 /* Copyright 2022 Listware */
 
-package org.listware.core.provider.utils.exceptions;
+package org.listware.core.utils.exceptions;
 
 import org.listware.sdk.pbcmdb.Core;
 

@@ -8,14 +8,16 @@ import com.google.auto.service.AutoService;
 
 import org.apache.flink.statefun.sdk.spi.StatefulFunctionModule;
 import org.listware.core.provider.FunctionProvider;
-import org.listware.core.provider.functions.Link;
 import org.listware.core.provider.functions.Log;
-import org.listware.core.provider.functions.Object;
-import org.listware.core.provider.functions.ObjectTrigger;
 import org.listware.core.provider.functions.Register;
 import org.listware.core.provider.functions.Router;
-import org.listware.core.provider.functions.Type;
-import org.listware.core.provider.functions.TypeTrigger;
+import org.listware.core.provider.functions.link.AdvancedLink;
+import org.listware.core.provider.functions.link.LinkTrigger;
+import org.listware.core.provider.functions.object.Link;
+import org.listware.core.provider.functions.object.Object;
+import org.listware.core.provider.functions.object.ObjectTrigger;
+import org.listware.core.provider.functions.object.Type;
+import org.listware.core.provider.functions.object.TypeTrigger;
 
 @AutoService(StatefulFunctionModule.class)
 public final class Module implements StatefulFunctionModule {
@@ -31,5 +33,7 @@ public final class Module implements StatefulFunctionModule {
 		binder.bindFunctionProvider(Router.FUNCTION_TYPE, provider);
 		binder.bindFunctionProvider(Log.FUNCTION_TYPE, provider);
 		binder.bindFunctionProvider(Register.FUNCTION_TYPE, provider);
+		binder.bindFunctionProvider(AdvancedLink.FUNCTION_TYPE, provider);
+		binder.bindFunctionProvider(LinkTrigger.FUNCTION_TYPE, provider);
 	}
 }

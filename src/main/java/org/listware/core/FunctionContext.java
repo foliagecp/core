@@ -3,25 +3,26 @@
 package org.listware.core;
 
 import org.apache.flink.statefun.sdk.Context;
-import org.apache.flink.statefun.sdk.FunctionType;
-import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 
 import org.listware.sdk.Functions;
-import org.listware.io.utils.TypedValueDeserializer;
+import org.listware.core.cmdb.Cmdb.SystemKeys;
 import org.listware.core.documents.ObjectDocument;
-import org.listware.core.provider.utils.Cmdb.Matcher;
-import org.listware.core.provider.utils.Cmdb.SystemKeys;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class FunctionContext {
+	@SuppressWarnings("unused")
 	private static final Logger LOG = LoggerFactory.getLogger(FunctionContext.class);
 
 	private Context flinkContext;
 	private ObjectDocument document;
 	private Functions.FunctionContext functionContext;
-	private boolean isExecutedCallback = false;
+
+
+	private class Matcher {
+		public static final String UUID_V4_STRING = "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[89abAB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}";
+		public static final String NUMERIC_STRING = "\\d+";
+	}
 
 	public FunctionContext(Context context, ObjectDocument document, Functions.FunctionContext functionContext) {
 		this.flinkContext = context;
@@ -87,31 +88,5 @@ public class FunctionContext {
 	 */
 	public boolean isType() {
 		return (!isRoot() && !isObjects() && !isTypes() && !isLink() && !isObject());
-	}
-
-	// You can execute callback only once, getCallback() to inherit func or
-	// Callback() after invoke
-	public void callback() throws Exception {
-		Functions.FunctionContext callback = getCallback();
-		if (callback != null) {
-			String namespace = callback.getFunctionType().getNamespace();
-			String type = callback.getFunctionType().getType();
-			FunctionType functionType = new FunctionType(namespace, type);
-
-			LOG.info("send: " + functionType + " id " + callback.getId());
-
-			TypedValue typedValue = TypedValueDeserializer.fromMessageLite(callback);
-			;
-
-			flinkContext.send(functionType, callback.getId(), typedValue);
-		}
-	}
-
-	public Functions.FunctionContext getCallback() {
-		if (functionContext.hasCallback() && !isExecutedCallback) {
-			isExecutedCallback = true;
-			return functionContext.getCallback();
-		}
-		return null;
 	}
 }

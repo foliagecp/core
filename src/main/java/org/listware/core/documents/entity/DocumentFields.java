@@ -12,6 +12,7 @@ public class DocumentFields {
 	public static final String REV = "_rev";
 	public static final String FROM = "_from";
 	public static final String TO = "_to";
+	
 	public static final String NAME = "_name";
 	public static final String TYPE = "_type";
 	public static final String META = "_meta";

@@ -7,7 +7,7 @@ import java.util.Map;
 import org.listware.core.documents.entity.DocumentFields;
 import org.listware.core.documents.entity.Name;
 import org.listware.core.documents.entity.Type;
-import org.listware.core.provider.utils.exceptions.PayloadNotFoundException;
+import org.listware.core.utils.exceptions.PayloadNotFoundException;
 
 import com.arangodb.entity.From;
 import com.arangodb.entity.To;
@@ -47,30 +47,15 @@ public class LinkDocument extends ObjectDocument {
 		this.to = to;
 	}
 
-	public LinkDocument(final String from, final String to, final String name, final String type) {
+	public LinkDocument(final String from, final String to, final String type, final String name) {
 		this(from, to);
 		this.name = name;
 		this.type = type;
 	}
 
 	public LinkDocument(final Map<String, Object> properties) {
-		super(properties);
-		final Object tmpFrom = properties.remove(DocumentFields.FROM);
-		if (tmpFrom != null) {
-			from = tmpFrom.toString();
-		}
-		final Object tmpTo = properties.remove(DocumentFields.TO);
-		if (tmpTo != null) {
-			to = tmpTo.toString();
-		}
-		final Object tmpName = properties.remove(DocumentFields.NAME);
-		if (tmpName != null) {
-			name = tmpName.toString();
-		}
-		final Object tmpType = properties.remove(DocumentFields.TYPE);
-		if (tmpType != null) {
-			type = tmpType.toString();
-		}
+		super();
+		replaceProperties(properties);
 	}
 
 	public String getFrom() {
@@ -101,6 +86,27 @@ public class LinkDocument extends ObjectDocument {
 		return type;
 	}
 
+	@Override
+	public void replaceProperties(final Map<String, Object> properties) {
+		final Object tmpFrom = properties.remove(DocumentFields.FROM);
+		if (tmpFrom != null) {
+			from = tmpFrom.toString();
+		}
+		final Object tmpTo = properties.remove(DocumentFields.TO);
+		if (tmpTo != null) {
+			to = tmpTo.toString();
+		}
+		final Object tmpName = properties.remove(DocumentFields.NAME);
+		if (tmpName != null) {
+			name = tmpName.toString();
+		}
+		final Object tmpType = properties.remove(DocumentFields.TYPE);
+		if (tmpType != null) {
+			type = tmpType.toString();
+		}
+		super.replaceProperties(properties);
+	}
+
 	public void setType(String type) {
 		this.type = type;
 	}
@@ -108,7 +114,7 @@ public class LinkDocument extends ObjectDocument {
 	@Override
 	public String toString() {
 		return "BaseDocument [documentRevision=" + revision + ", documentHandle=" + id + ", documentKey=" + key
-				+ ", from=" + from + ", to=" + to + ", properties=" + properties + "]";
+				+ ", from=" + from + ", to=" + to + ", properties=" + this.getProperties() + "]";
 	}
 
 	@Override
