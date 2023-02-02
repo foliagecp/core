@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions;
 
@@ -42,6 +45,12 @@ public class Register extends Base {
 
 	@Override
 	public void invoke(Context context, Functions.FunctionContext functionContext) throws Exception {
+		try {
+			cmdb.bootstrap();
+
+		} catch (Exception ex) {
+			LOG.error(ex.getLocalizedMessage());
+		}
 		Core.RegisterMessage registerMessage = Core.RegisterMessage.parseFrom(functionContext.getValue());
 
 		RegisterMessage message = new RegisterMessage(registerMessage);
