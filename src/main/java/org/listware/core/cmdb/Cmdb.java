@@ -1,6 +1,6 @@
 /*
- * Copyright 2022
- * Listware
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
  */
 
 package org.listware.core.cmdb;
@@ -9,21 +9,27 @@ import org.apache.flink.statefun.sdk.Context;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 import org.listware.core.documents.LinkDocument;
 import org.listware.core.documents.ObjectDocument;
+import org.listware.core.provider.functions.Register;
+import org.listware.core.provider.functions.Router;
+import org.listware.core.provider.functions.link.AdvancedLink;
 import org.listware.core.provider.functions.link.LinkTrigger;
 import org.listware.core.provider.functions.object.ObjectTrigger;
+import org.listware.core.provider.functions.object.Type;
+import org.listware.core.provider.functions.object.Link;
+import org.listware.core.provider.functions.object.Object;
 import org.listware.core.utils.exceptions.AlreadyLinkException;
 import org.listware.core.utils.exceptions.NoLinkException;
-import org.listware.core.utils.exceptions.UnknownIdException;
 import org.listware.io.grpc.FinderClient;
 import org.listware.io.grpc.QDSLClient;
 import org.listware.io.utils.TypedValueDeserializer;
+import org.listware.io.utils.Constants.Namespaces;
 import org.listware.sdk.Functions;
 import org.listware.sdk.pbcmdb.Core;
 import org.listware.sdk.pbcmdb.pbfinder.Finder;
 import org.listware.sdk.pbcmdb.pbqdsl.QDSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import com.google.protobuf.util.JsonFormat;
 import com.google.protobuf.ByteString;
 
 public class Cmdb {
@@ -52,9 +58,9 @@ public class Cmdb {
 	}
 
 	private ObjectClient objectClient = new ObjectClient();
-	public LinkClient linkClient = new LinkClient();
-	public QDSLClient qdslClient = new QDSLClient();
-	public FinderClient finderClient = new FinderClient();
+	private LinkClient linkClient = new LinkClient();
+	private QDSLClient qdslClient = new QDSLClient();
+	private FinderClient finderClient = new FinderClient();
 
 	public void shutdown() throws InterruptedException {
 		objectClient.shutdown();
@@ -70,14 +76,14 @@ public class Cmdb {
 
 	private ObjectDocument updateDocument(ObjectDocument document) throws Exception {
 		document = objectClient.updateDocument(document.getId(), document.serialize());
-		LOG.info("updated " + document.getId());
+		LOG.debug("updated " + document.getId());
 		return document;
 	}
 
 	// D same for types/objects/system
 	private void removeDocument(ObjectDocument document) throws Exception {
 		objectClient.removeDocument(document.getId());
-		LOG.info("deleted " + document.getId());
+		LOG.debug("deleted " + document.getId());
 	}
 
 	// R links
@@ -85,17 +91,25 @@ public class Cmdb {
 		return linkClient.readDocument(id);
 	}
 
-	public LinkDocument readLinkDocument(String from, String name) throws Exception {
-		Finder.Response response = finderClient.from(from, name);
+	public LinkDocument readLinkDocumentByName(String from, String name) throws Exception {
+		Finder.Response response = finderClient.findFrom(from, name);
 		if (response.getLinksCount() == 0) {
 			throw new NoLinkException(from, name);
 		}
 		return LinkDocument.deserialize(response.getLinks(0).getPayload());
 	}
 
+	public LinkDocument readLinkDocumentByTo(String from, String to) throws Exception {
+		Finder.Response response = finderClient.findFromTo(from, to);
+		if (response.getLinksCount() == 0) {
+			throw new NoLinkException(from);
+		}
+		return LinkDocument.deserialize(response.getLinks(0).getPayload());
+	}
+
 	// do not duplicate link with name
 	public void checkFrom(ObjectDocument parent, String name) throws Exception {
-		Finder.Response response = finderClient.from(parent.getId(), name);
+		Finder.Response response = finderClient.findFrom(parent.getId(), name);
 		if (response.getLinksCount() > 0) {
 			throw new AlreadyLinkException(parent.getId(), name);
 		}
@@ -103,30 +117,28 @@ public class Cmdb {
 
 	public LinkDocument updateLinkDocument(LinkDocument document) throws Exception {
 		document = linkClient.updateDocument(document.getId(), document.serialize());
-		LOG.info("updated " + document.getId());
+		LOG.debug("updated " + document.getId());
 		return document;
 	}
 
 	// D links
 	public void removeDocument(LinkDocument document) throws Exception {
 		linkClient.removeDocument(document.getId());
-		LOG.info("deleted " + document.getId());
+		LOG.debug("deleted " + document.getId());
 	}
 
 	/*******************************************************************************************/
 	// C for SYSTEM
 	public ObjectDocument createSystem(ObjectDocument document) throws Exception {
 		document = objectClient.createDocument(Collections.SYSTEM, document.serialize());
-
-		LOG.info("created system " + document.getId());
-
+		LOG.debug("created system " + document.getId());
 		return document;
 	}
 
 	public ObjectDocument createSystem(ObjectDocument parent, ObjectDocument document) throws Exception {
 		document = objectClient.createDocument(Collections.SYSTEM, document.serialize());
 
-		LOG.info("created system " + document.getId());
+		LOG.debug("created system " + document.getId());
 
 		// link root -> object
 		createLink(parent, document, LinkTypes.SYSTEM, document.getKey());
@@ -145,14 +157,14 @@ public class Cmdb {
 		// link from types -> type
 		createLink(types, document, LinkTypes.TYPE, document.getKey());
 
-		LOG.info("created type " + document.getId());
+		LOG.debug("created type " + document.getId());
 
 		return document;
 	}
 
 	public ObjectDocument updateType(Context context, ObjectDocument document) throws Exception {
 		document = updateDocument(document);
-
+		// trigger??
 		return document;
 	}
 
@@ -174,7 +186,7 @@ public class Cmdb {
 		// link objects -> object ($uuid)
 		createLink(objects, document, type.getKey(), document.getKey());
 
-		LOG.info("created object " + document.getId());
+		LOG.debug("created object " + document.getId());
 
 		return document;
 	}
@@ -249,7 +261,7 @@ public class Cmdb {
 
 		link = linkClient.createDocument(Collections.LINKS, link.serialize());
 
-		LOG.info("created link" + link.getId());
+		LOG.debug("created link" + link.getId());
 
 		return link;
 	}
@@ -264,7 +276,7 @@ public class Cmdb {
 
 		link = linkClient.createDocument(Collections.LINKS, link.serialize());
 
-		LOG.info("created link" + link.getId());
+		LOG.debug("created link" + link.getId());
 
 		return link;
 	}
@@ -274,13 +286,9 @@ public class Cmdb {
 
 		LinkDocument link = createLink(parent, document, type, name, payload);
 
-		Functions.FunctionContext pbFunctionContext = LinkTrigger.Trigger(link.getId(), Core.Method.CREATE);
+		LinkTrigger.ExecuteTriggerFunction(context, link.getId(), Core.Method.CREATE);
 
-		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
-
-		context.send(LinkTrigger.FUNCTION_TYPE, link.getId(), typedValue);
-
-		LOG.info("created link" + link.getId());
+		LOG.debug("created link" + link.getId());
 
 		return link;
 	}
@@ -288,13 +296,14 @@ public class Cmdb {
 	public LinkDocument updateLink(Context context, LinkDocument document) throws Exception {
 		document = updateLinkDocument(document);
 
-		Functions.FunctionContext pbFunctionContext = LinkTrigger.Trigger(document.getId(), Core.Method.UPDATE);
-
-		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
-
-		context.send(LinkTrigger.FUNCTION_TYPE, document.getId(), typedValue);
+		LinkTrigger.ExecuteTriggerFunction(context, document.getId(), Core.Method.UPDATE);
 
 		return document;
+	}
+
+	public String getTypeId(String id) throws Exception {
+		LinkDocument document = readLinkDocumentByTo("system/objects", id);
+		return "types/" + document.getType();
 	}
 
 	public void bootstrap() throws Exception {
@@ -354,6 +363,7 @@ public class Cmdb {
 			functions = readDocument(elements.getElements(0).getId());
 		}
 
+		// system mountpoint
 		elements = qdslClient.qdsl("system.functions.root", options);
 		ObjectDocument system = null;
 		if (elements.getElementsCount() == 0) {
@@ -363,45 +373,32 @@ public class Cmdb {
 			system = readDocument(elements.getElements(0).getId());
 		}
 
-		elements = qdslClient.qdsl("types.system.functions.root", options);
-		ObjectDocument typesFunction = null;
-		if (elements.getElementsCount() == 0) {
-			typesFunction = new ObjectDocument();
-			typesFunction = createObject(function, system, typesFunction, "types");
-		} else {
-			typesFunction = readDocument(elements.getElements(0).getId());
-		}
+		// functions declaration
+		bootstrapFunction(function, system, Type.TYPE, "types");
+		bootstrapFunction(function, system, Object.TYPE, "objects");
+		ObjectDocument linksFunction = bootstrapFunction(function, system, Link.TYPE, "links");
+		bootstrapFunction(function, linksFunction, AdvancedLink.TYPE, "advanced");
 
-		elements = qdslClient.qdsl("objects.system.functions.root", options);
-		ObjectDocument objectsFunction = null;
-		if (elements.getElementsCount() == 0) {
-			objectsFunction = new ObjectDocument();
-			objectsFunction = createObject(function, system, objectsFunction, "objects");
-		} else {
-			objectsFunction = readDocument(elements.getElements(0).getId());
-		}
-
-		elements = qdslClient.qdsl("links.system.functions.root", options);
-		ObjectDocument linksFunction = null;
-		if (elements.getElementsCount() == 0) {
-			linksFunction = new ObjectDocument();
-			linksFunction = createObject(function, system, linksFunction, "links");
-		} else {
-			linksFunction = readDocument(elements.getElements(0).getId());
-		}
+		bootstrapFunction(function, system, Register.TYPE, "register");
+		bootstrapFunction(function, system, Router.TYPE, "router");
 	}
 
-	public String getTypeId(String id) throws Exception {
-		QDSL.Options options = QDSL.Options.newBuilder().setType(true).build();
-
-		String query = String.format("*[?@._id == '%s'?].objects", id);
-
+	private ObjectDocument bootstrapFunction(ObjectDocument parentType, ObjectDocument parent, String query,
+			String name) throws Exception {
+		QDSL.Options options = QDSL.Options.newBuilder().setObject(true).build();
 		QDSL.Elements elements = qdslClient.qdsl(query, options);
-
-		for (QDSL.Element element : elements.getElementsList()) {
-			return "types/" + element.getType();
+		if (elements.getElementsCount() > 0) {
+			return ObjectDocument.deserialize(elements.getElements(0).getObject());
 		}
-		throw new UnknownIdException(id);
+
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setType(query)
+				.setNamespace(Namespaces.INTERNAL).build();
+
+		Functions.Function.Builder function = Functions.Function.newBuilder().setDescription("system function")
+				.setFunctionType(functionType);
+
+		ObjectDocument document = ObjectDocument.deserialize(JsonFormat.printer().print(function).getBytes());
+		return createObject(parentType, parent, document, name);
 	}
 
 }

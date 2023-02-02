@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions.object;
 
@@ -79,7 +82,7 @@ public class Link extends ObjectContext {
 	private void update(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
 		Result.ReplyResult replyResult = replyResult(functionContext.getFlinkContext());
 
-		LinkDocument document = cmdb.readLinkDocument(functionContext.getDocument().getId(), message.getName());
+		LinkDocument document = cmdb.readLinkDocumentByName(functionContext.getDocument().getId(), message.getName());
 
 		Functions.FunctionContext pbFunctionContext = AdvancedLink.ProxyMessage(document.getId(), message, replyResult);
 
@@ -91,7 +94,7 @@ public class Link extends ObjectContext {
 	private void delete(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
 		Result.ReplyResult replyResult = replyResult(functionContext.getFlinkContext());
 
-		LinkDocument document = cmdb.readLinkDocument(functionContext.getDocument().getId(), message.getName());
+		LinkDocument document = cmdb.readLinkDocumentByName(functionContext.getDocument().getId(), message.getName());
 
 		Functions.FunctionContext pbFunctionContext = AdvancedLink.ProxyMessage(document.getId(), message, replyResult);
 
@@ -112,7 +115,7 @@ public class Link extends ObjectContext {
 
 		LinkDocument document = null;
 		try {
-			document = cmdb.readLinkDocument(from.getId(), to.getKey());
+			document = cmdb.readLinkDocumentByTo(from.getId(), to.getId());
 			document = Trigger.add(document, trigger);
 			document = cmdb.updateLinkDocument(document);
 		} catch (AlreadyTriggerException ex) {
@@ -122,7 +125,7 @@ public class Link extends ObjectContext {
 			document = cmdb.createLink(from, to, "trigger", to.getKey(), document.serialize());
 		}
 
-		LOG.info("created link trigger " + document.getId());
+		LOG.debug("created link trigger " + document.getId());
 	}
 
 	private void deleteTrigger(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
@@ -135,11 +138,11 @@ public class Link extends ObjectContext {
 		ObjectDocument from = functionContext.getDocument();
 		ObjectDocument to = cmdb.readDocument(message.getTo());
 
-		LinkDocument document = cmdb.readLinkDocument(from.getId(), to.getKey());
+		LinkDocument document = cmdb.readLinkDocumentByTo(from.getId(), to.getId());
 		document = Trigger.delete(document, trigger);
 		document = cmdb.updateLinkDocument(document);
 
-		LOG.info("deleted type trigger " + document.getId());
+		LOG.debug("deleted type trigger " + document.getId());
 	}
 
 	/**

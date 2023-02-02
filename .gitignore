@@ -9,3 +9,4 @@ __pycahe__/*
 .settings/
 .classpath
 .project
+deployment/
