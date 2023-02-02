@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.documents;
 
@@ -153,6 +156,10 @@ public class ObjectDocument implements Serializable {
 		return properties.get(key);
 	}
 
+	public Boolean containsAttribute(final String key) {
+		return properties.containsKey(key);
+	}
+
 	public void updateProperties(final Map<String, Object> properties) {
 		properties.remove(DocumentFields.ID);
 		properties.remove(DocumentFields.KEY);
@@ -230,6 +237,10 @@ public class ObjectDocument implements Serializable {
 		ObjectMapper mapper = new ObjectMapper();
 		byte[] values = mapper.writeValueAsBytes(this);
 		return ByteString.copyFrom(values);
+	}
+
+	public static ObjectDocument deserialize(byte[] values) throws Exception {
+		return deserialize(ByteString.copyFrom(values));
 	}
 
 	public static ObjectDocument deserialize(ByteString payload) throws Exception {

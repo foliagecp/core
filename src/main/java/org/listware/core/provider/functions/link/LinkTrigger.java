@@ -1,6 +1,6 @@
 /*
- * Copyright 2022
- * Listware
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
  */
 
 package org.listware.core.provider.functions.link;
@@ -15,14 +15,18 @@ import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 import org.listware.core.FunctionContext;
 import org.listware.core.cmdb.Trigger;
 import org.listware.core.documents.LinkDocument;
+import org.listware.core.documents.ObjectDocument;
+import org.listware.core.utils.exceptions.NoLinkException;
+import org.listware.core.utils.exceptions.TriggerNotFoundException;
 import org.listware.core.utils.exceptions.UnknownMethodException;
 import org.listware.io.utils.TypedValueDeserializer;
 import org.listware.io.utils.Constants.Namespaces;
 import org.listware.sdk.Functions;
 import org.listware.sdk.pbcmdb.Core;
-import org.listware.sdk.pbcmdb.pbqdsl.QDSL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.util.JsonFormat;
 
 public class LinkTrigger extends LinkContext {
 	@SuppressWarnings("unused")
@@ -42,28 +46,83 @@ public class LinkTrigger extends LinkContext {
 
 		LinkDocument document = (LinkDocument) functionContext.getDocument();
 
-		String from = cmdb.getTypeId(document.getFrom());
-		String to = cmdb.getTypeId(document.getTo());
+		String fromType = cmdb.getTypeId(document.getFrom());
+		String toType = cmdb.getTypeId(document.getTo());
 
-		QDSL.Options options = QDSL.Options.newBuilder().setLink(true).build();
+		try {
+			// type1 -> type2
+			LinkDocument typesDocument = cmdb.readLinkDocumentByTo(fromType, toType);
+			onTrigger(functionContext.getFlinkContext(), typesDocument, document.getFrom(), message.getMethod());
+			onTrigger(functionContext.getFlinkContext(), typesDocument, document.getTo(), message.getMethod());
+		} catch (NoLinkException ex) {
+			LOG.debug(ex.getLocalizedMessage());
+		} catch (TriggerNotFoundException ex) {
+			LOG.debug(ex.getLocalizedMessage());
+		}
 
-		String query = String.format("*[?@._id == '%s'?].*[?@._id == '%s'?].types", to, from);
+		String functionTypeKey = "types/function";
+		if (fromType.equals(functionTypeKey)) {
+			try {
+				executeFunctionTrigger(functionContext.getFlinkContext(), document, message.getMethod());
+			} catch (Exception ex) {
+				LOG.error(ex.getLocalizedMessage());
+			}
+		}
+	}
 
-		QDSL.Elements elements = cmdb.qdslClient.qdsl(query, options);
+	private void executeFunctionTrigger(Context context, LinkDocument document, Core.Method method) throws Exception {
+		ObjectDocument functionDocument = cmdb.readDocument(document.getFrom());
 
-		for (QDSL.Element element : elements.getElementsList()) {
-			LinkDocument link = LinkDocument.deserialize(element.getLink());
+		String functionTypeKey = "function_type";
 
-			Map<String, Trigger> triggers = new HashMap<>();
+		if (functionDocument.containsAttribute(functionTypeKey)) {
 
-			switch (message.getMethod()) {
+			java.lang.Object object = functionDocument.getAttribute(functionTypeKey);
+
+			Functions.FunctionType.Builder builder = Functions.FunctionType.newBuilder();
+
+			JsonFormat.parser().merge(object.toString(), builder);
+
+			Functions.FunctionType functionType = builder.build();
+
+			String namespace = functionType.getNamespace();
+			String type = functionType.getType();
+
+			String executeOnCreateKey = "execute_on_create";
+			if (document.containsAttribute(executeOnCreateKey)) {
+				java.lang.Object executeOnCreate = document.getAttribute(executeOnCreateKey);
+				if (executeOnCreate instanceof Boolean) {
+					Boolean flag = (Boolean) executeOnCreate;
+					if (flag && method == Core.Method.CREATE) {
+						executeTrigger(context, document.getTo(), namespace, type);
+					}
+				}
+			}
+
+			String executeOnUpdateKey = "execute_on_update";
+			if (document.containsAttribute(executeOnUpdateKey)) {
+				java.lang.Object executeOnUpdate = document.getAttribute(executeOnUpdateKey);
+				if (executeOnUpdate instanceof Boolean) {
+					Boolean flag = (Boolean) executeOnUpdate;
+					if (flag && method == Core.Method.UPDATE) {
+						executeTrigger(context, document.getTo(), namespace, type);
+					}
+				}
+			}
+
+		}
+	}
+
+	private void onTrigger(Context context, LinkDocument link, String id, Core.Method method) throws Exception {
+		Map<String, Trigger> triggers = new HashMap<>();
+		try {
+			switch (method) {
 			case CREATE:
 				triggers = Trigger.getByType(link, Trigger.CREATE);
 				break;
 
 			case UPDATE:
 				triggers = Trigger.getByType(link, Trigger.UPDATE);
-
 				break;
 
 			case DELETE:
@@ -71,24 +130,28 @@ public class LinkTrigger extends LinkContext {
 				break;
 
 			default:
-				throw new UnknownMethodException(message.getMethod());
+				throw new UnknownMethodException(method);
 			}
 
 			for (Trigger trigger : triggers.values()) {
-				execTrigger(functionContext.getFlinkContext(), document.getFrom(), trigger, message.getMethod());
-				execTrigger(functionContext.getFlinkContext(), document.getTo(), trigger, message.getMethod());
+				executeTrigger(context, id, trigger);
 			}
-
+		} catch (TriggerNotFoundException ignore) {
 		}
 	}
 
-	private void execTrigger(Context context, String id, Trigger trigger, Core.Method method) {
-		Functions.FunctionContext pbFunctionContext = Exec(id, trigger.getNamespace(), trigger.getType(), method);
-
+	private void executeTrigger(Context context, String id, Trigger trigger) throws Exception {
+		Functions.FunctionContext pbFunctionContext = CreateFunctionContext(id, trigger.getNamespace(),
+				trigger.getType());
 		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
-
 		FunctionType functionType = new FunctionType(trigger.getNamespace(), trigger.getType());
+		context.send(functionType, pbFunctionContext.getId(), typedValue);
+	}
 
+	private void executeTrigger(Context context, String id, String namespace, String type) throws Exception {
+		Functions.FunctionContext pbFunctionContext = CreateFunctionContext(id, namespace, type);
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
+		FunctionType functionType = new FunctionType(namespace, type);
 		context.send(functionType, pbFunctionContext.getId(), typedValue);
 	}
 
@@ -98,30 +161,15 @@ public class LinkTrigger extends LinkContext {
 	 * @param id     string
 	 * @param method Method
 	 */
-	public static Functions.FunctionContext Trigger(String id, Core.Method method) {
-		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(Namespaces.INTERNAL)
-				.setType(TYPE).build();
-
+	public static Functions.FunctionContext CreateTriggerFunctionContext(String id, Core.Method method)
+			throws Exception {
 		Core.LinkMessage message = Core.LinkMessage.newBuilder().setMethod(method).build();
-
-		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setFunctionType(functionType)
-				.setId(id).setValue(message.toByteString());
-		return builder.build();
+		return CreateFunctionContext(id, Namespaces.INTERNAL, TYPE, message.toByteString());
 	}
 
-	/**
-	 * Exec function
-	 **
-	 * @param id        string
-	 * @param namespace string
-	 * @param type      string
-	 * @param method    Method
-	 */
-	public static Functions.FunctionContext Exec(String id, String namespace, String type, Core.Method method) {
-		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(namespace).setType(type)
-				.build();
-		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setFunctionType(functionType)
-				.setId(id);
-		return builder.build();
+	public static void ExecuteTriggerFunction(Context context, String id, Core.Method method) throws Exception {
+		Functions.FunctionContext pbFunctionContext = CreateTriggerFunctionContext(id, method);
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
+		context.send(FUNCTION_TYPE, id, typedValue);
 	}
 }

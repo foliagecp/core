@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions.object;
 
@@ -129,7 +132,7 @@ public class Type extends ObjectContext {
 
 		document = cmdb.updateType(functionContext.getFlinkContext(), document);
 
-		LOG.info("created type trigger " + document.getId());
+		LOG.debug("created type trigger " + document.getId());
 	}
 
 	private void deleteTrigger(FunctionContext functionContext, Core.TypeMessage message) throws Exception {
@@ -141,7 +144,7 @@ public class Type extends ObjectContext {
 
 		document = cmdb.updateType(functionContext.getFlinkContext(), document);
 
-		LOG.info("deleted type trigger " + document.getId());
+		LOG.debug("deleted type trigger " + document.getId());
 	}
 
 	/**

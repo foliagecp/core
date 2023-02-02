@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions;
 
@@ -11,6 +14,8 @@ import org.listware.sdk.Functions;
 import org.listware.sdk.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class Base extends Sync implements StatefulFunction {
 	private static final Logger LOG = LoggerFactory.getLogger(Base.class);
@@ -26,7 +31,7 @@ public class Base extends Sync implements StatefulFunction {
 		long startTime = System.currentTimeMillis();
 
 		try {
-			LOG.info(context.self().toString());
+			LOG.debug(context.self().toString());
 
 			if (input instanceof TypedValue) {
 				TypedValue typedValue = (TypedValue) input;
@@ -53,7 +58,7 @@ public class Base extends Sync implements StatefulFunction {
 
 				long endTime = System.currentTimeMillis();
 
-				LOG.info(context.self() + ": took " + (endTime - startTime) + " milliseconds");
+				LOG.debug(context.self() + ": took " + (endTime - startTime) + " milliseconds");
 			} catch (Exception e) {
 				LOG.error(context.self() + ": " + e.getLocalizedMessage());
 			}
@@ -64,6 +69,31 @@ public class Base extends Sync implements StatefulFunction {
 	}
 
 	public void invoke(FunctionContext functionContext) throws Exception {
+	}
+
+	/**
+	 * CreateFunctionContext function
+	 **
+	 * @param id        string
+	 * @param namespace string
+	 * @param type      string
+	 * @param method    Method
+	 */
+	public static Functions.FunctionContext CreateFunctionContext(String id, String namespace, String type) {
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(namespace).setType(type)
+				.build();
+		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setFunctionType(functionType)
+				.setId(id);
+		return builder.build();
+	}
+
+	public static Functions.FunctionContext CreateFunctionContext(String id, String namespace, String type,
+			ByteString payload) {
+		Functions.FunctionType functionType = Functions.FunctionType.newBuilder().setNamespace(namespace).setType(type)
+				.build();
+		Functions.FunctionContext.Builder builder = Functions.FunctionContext.newBuilder().setFunctionType(functionType)
+				.setId(id).setValue(payload);
+		return builder.build();
 	}
 
 }

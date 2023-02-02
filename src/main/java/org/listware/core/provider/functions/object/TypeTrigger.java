@@ -1,13 +1,18 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions.object;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.flink.statefun.sdk.FunctionType;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 import org.listware.core.FunctionContext;
 import org.listware.core.cmdb.Trigger;
+import org.listware.core.utils.exceptions.TriggerNotFoundException;
 import org.listware.core.utils.exceptions.UnknownMethodException;
 import org.listware.io.utils.TypedValueDeserializer;
 import org.listware.io.utils.Constants.Namespaces;
@@ -32,35 +37,38 @@ public class TypeTrigger extends ObjectContext {
 	public void invoke(FunctionContext functionContext) throws Exception {
 		Core.TypeMessage message = Core.TypeMessage.parseFrom(functionContext.getFunctionContext().getValue());
 
-		Map<String, Trigger> triggers = null;
+		Map<String, Trigger> triggers = new HashMap<>();
 
-		switch (message.getMethod()) {
-		case CREATE:
-			triggers = Trigger.getByType(functionContext.getDocument(), Trigger.CREATE);
-			break;
+		try {
+			switch (message.getMethod()) {
+			case CREATE:
+				triggers = Trigger.getByType(functionContext.getDocument(), Trigger.CREATE);
+				break;
 
-		case UPDATE:
-			triggers = Trigger.getByType(functionContext.getDocument(), Trigger.UPDATE);
-			break;
+			case UPDATE:
+				triggers = Trigger.getByType(functionContext.getDocument(), Trigger.UPDATE);
+				break;
 
-		case DELETE:
-			triggers = Trigger.getByType(functionContext.getDocument(), Trigger.DELETE);
-			break;
+			case DELETE:
+				triggers = Trigger.getByType(functionContext.getDocument(), Trigger.DELETE);
+				break;
 
-		default:
-			throw new UnknownMethodException(message.getMethod());
-		}
+			default:
+				throw new UnknownMethodException(message.getMethod());
+			}
 
-		for (Trigger trigger : triggers.values()) {
-			Functions.FunctionContext pbFunctionContext = Exec(functionContext.getFlinkContext().caller().id(),
-					trigger.getNamespace(), trigger.getType(), message.getMethod());
+			for (Trigger trigger : triggers.values()) {
+				Functions.FunctionContext pbFunctionContext = Exec(functionContext.getFlinkContext().caller().id(),
+						trigger.getNamespace(), trigger.getType(), message.getMethod());
 
-			TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
+				TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
 
-			FunctionType functionType = new FunctionType(trigger.getNamespace(), trigger.getType());
+				FunctionType functionType = new FunctionType(trigger.getNamespace(), trigger.getType());
 
-			functionContext.getFlinkContext().send(functionType, functionContext.getFlinkContext().caller().id(),
-					typedValue);
+				functionContext.getFlinkContext().send(functionType, functionContext.getFlinkContext().caller().id(),
+						typedValue);
+			}
+		} catch (TriggerNotFoundException ignore) {
 		}
 	}
 
