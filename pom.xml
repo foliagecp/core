@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.listware</groupId>
 	<artifactId>core</artifactId>
-	<version>1.1</version>
+	<version>0.1.0</version>
 	<packaging>jar</packaging>
 
 	<properties>
@@ -27,6 +27,11 @@
 		<dependency>
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
+			<version>3.7.1</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.protobuf</groupId>
+			<artifactId>protobuf-java-util</artifactId>
 			<version>3.7.1</version>
 		</dependency>
 		<dependency>
@@ -84,13 +89,13 @@
 		<dependency>
 			<groupId>org.listware</groupId>
 			<artifactId>io</artifactId>
-			<version>1.1</version>
+			<version>0.1.0</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.listware</groupId>
 			<artifactId>proto</artifactId>
-			<version>1.1</version>
+			<version>0.1.0</version>
 		</dependency>
 	</dependencies>
 
@@ -125,18 +130,26 @@
 	</build>
 	<repositories>
 		<repository>
-			<id>gitea</id>
-			<url>http://git.fg-tech.ru/api/packages/listware/maven</url>
+			<id>proto</id>
+			<url>https://maven.pkg.github.com/foliagecp/proto</url>
+		</repository>
+		<repository>
+			<id>io</id>
+			<url>https://maven.pkg.github.com/foliagecp/io</url>
+		</repository>
+		<repository>
+			<id>github</id>
+			<url>https://maven.pkg.github.com/foliagecp/core</url>
 		</repository>
 	</repositories>
 	<distributionManagement>
 		<repository>
-			<id>gitea</id>
-			<url>http://git.fg-tech.ru/api/packages/listware/maven</url>
+			<id>github</id>
+			<url>https://maven.pkg.github.com/foliagecp/core</url>
 		</repository>
 		<snapshotRepository>
-			<id>gitea</id>
-			<url>http://git.fg-tech.ru/api/packages/listware/maven</url>
+			<id>github</id>
+			<url>https://maven.pkg.github.com/foliagecp/core</url>
 		</snapshotRepository>
 	</distributionManagement>
 </project>
