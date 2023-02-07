@@ -80,6 +80,12 @@ public class Cmdb {
 		return document;
 	}
 
+	private ObjectDocument replaceDocument(ObjectDocument document) throws Exception {
+		document = objectClient.replaceDocument(document.getId(), document.serialize());
+		LOG.debug("replaced " + document.getId());
+		return document;
+	}
+
 	// D same for types/objects/system
 	private void removeDocument(ObjectDocument document) throws Exception {
 		objectClient.removeDocument(document.getId());
@@ -118,6 +124,12 @@ public class Cmdb {
 	public LinkDocument updateLinkDocument(LinkDocument document) throws Exception {
 		document = linkClient.updateDocument(document.getId(), document.serialize());
 		LOG.debug("updated " + document.getId());
+		return document;
+	}
+
+	public LinkDocument replaceLinkDocument(LinkDocument document) throws Exception {
+		document = linkClient.replaceDocument(document.getId(), document.serialize());
+		LOG.debug("replaced " + document.getId());
 		return document;
 	}
 
@@ -164,6 +176,12 @@ public class Cmdb {
 
 	public ObjectDocument updateType(Context context, ObjectDocument document) throws Exception {
 		document = updateDocument(document);
+		// trigger??
+		return document;
+	}
+
+	public ObjectDocument replaceType(Context context, ObjectDocument document) throws Exception {
+		document = replaceDocument(document);
 		// trigger??
 		return document;
 	}
@@ -239,6 +257,15 @@ public class Cmdb {
 		return document;
 	}
 
+	public ObjectDocument replaceObject(Context context, ObjectDocument document) throws Exception {
+		document = replaceDocument(document);
+		Functions.FunctionContext pbFunctionContext = ObjectTrigger.Trigger(document.getId(), Core.Method.UPDATE);
+		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
+		context.send(ObjectTrigger.FUNCTION_TYPE, document.getId(), typedValue);
+
+		return document;
+	}
+
 	public void removeObject(Context context, ObjectDocument document) throws Exception {
 		removeDocument(document);
 		// move trigger to link type -> objects
@@ -295,6 +322,14 @@ public class Cmdb {
 
 	public LinkDocument updateLink(Context context, LinkDocument document) throws Exception {
 		document = updateLinkDocument(document);
+
+		LinkTrigger.ExecuteTriggerFunction(context, document.getId(), Core.Method.UPDATE);
+
+		return document;
+	}
+
+	public LinkDocument replaceLink(Context context, LinkDocument document) throws Exception {
+		document = replaceLinkDocument(document);
 
 		LinkTrigger.ExecuteTriggerFunction(context, document.getId(), Core.Method.UPDATE);
 

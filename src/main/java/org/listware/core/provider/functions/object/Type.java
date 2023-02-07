@@ -59,6 +59,10 @@ public class Type extends ObjectContext {
 			update(functionContext, message);
 			break;
 
+		case REPLACE:
+			replace(functionContext, message);
+			break;
+
 		case DELETE:
 			delete(functionContext);
 			break;
@@ -90,10 +94,22 @@ public class Type extends ObjectContext {
 		if (!functionContext.isType()) {
 			throw new UnknownIdException(functionContext.getFlinkContext().self().id());
 		}
-		ObjectDocument document = functionContext.getDocument();
-		document.replaceProperties(message.getPayload());
+
+		ObjectDocument document = ObjectDocument.deserialize(message.getPayload());
 		document.setId(functionContext.getFlinkContext().self().id());
+
 		document = cmdb.updateType(functionContext.getFlinkContext(), document);
+	}
+
+	private void replace(FunctionContext functionContext, Core.TypeMessage message) throws Exception {
+		if (!functionContext.isType()) {
+			throw new UnknownIdException(functionContext.getFlinkContext().self().id());
+		}
+
+		ObjectDocument document = ObjectDocument.deserialize(message.getPayload());
+		document.setId(functionContext.getFlinkContext().self().id());
+
+		document = cmdb.replaceType(functionContext.getFlinkContext(), document);
 	}
 
 	// TODO delete all objects with type
@@ -142,7 +158,7 @@ public class Type extends ObjectContext {
 		Core.Trigger trigger = Core.Trigger.parseFrom(message.getPayload());
 		ObjectDocument document = Trigger.delete(functionContext.getDocument(), trigger);
 
-		document = cmdb.updateType(functionContext.getFlinkContext(), document);
+		document = cmdb.replaceType(functionContext.getFlinkContext(), document);
 
 		LOG.debug("deleted type trigger " + document.getId());
 	}

@@ -1,4 +1,7 @@
-/* Copyright 2022 Listware */
+/*
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
+ */
 
 package org.listware.core.provider.functions.object;
 
@@ -47,6 +50,10 @@ public class Object extends ObjectContext {
 			update(functionContext, message);
 			break;
 
+		case REPLACE:
+			replace(functionContext, message);
+			break;
+
 		case DELETE:
 			delete(functionContext);
 			break;
@@ -72,10 +79,21 @@ public class Object extends ObjectContext {
 			throw new UnknownIdException(functionContext.getFlinkContext().self().id());
 		}
 
-		ObjectDocument document = functionContext.getDocument();
-		document.replaceProperties(message.getPayload());
+		ObjectDocument document = ObjectDocument.deserialize(message.getPayload());
 		document.setId(functionContext.getFlinkContext().self().id());
+
 		document = cmdb.updateObject(functionContext.getFlinkContext(), document);
+	}
+
+	private void replace(FunctionContext functionContext, Core.ObjectMessage message) throws Exception {
+		if (!functionContext.isObject()) {
+			throw new UnknownIdException(functionContext.getFlinkContext().self().id());
+		}
+
+		ObjectDocument document = ObjectDocument.deserialize(message.getPayload());
+		document.setId(functionContext.getFlinkContext().self().id());
+
+		document = cmdb.replaceObject(functionContext.getFlinkContext(), document);
 	}
 
 	private void delete(FunctionContext functionContext) throws Exception {
