@@ -1,6 +1,6 @@
 /*
- * Copyright 2022
- * Listware
+ *  Copyright 2023 NJWS Inc.
+ *  Copyright 2022 Listware
  */
 
 package org.listware.core.cmdb;
@@ -36,6 +36,15 @@ public class ObjectClient extends VertexClient {
 	public ObjectDocument updateDocument(String id, ByteString payload) throws Exception {
 		Parser parser = new Parser(id);
 		Core.Response resp = update(parser.getCollection(), parser.getKey(), payload);
+		if (resp.getPayload().isEmpty()) {
+			throw new PayloadNotFoundException();
+		}
+		return ObjectDocument.deserialize(resp.getPayload());
+	}
+
+	public ObjectDocument replaceDocument(String id, ByteString payload) throws Exception {
+		Parser parser = new Parser(id);
+		Core.Response resp = replace(parser.getCollection(), parser.getKey(), payload);
 		if (resp.getPayload().isEmpty()) {
 			throw new PayloadNotFoundException();
 		}

@@ -38,6 +38,15 @@ public class LinkClient extends EdgeClient {
 		return LinkDocument.deserialize(resp.getPayload());
 	}
 
+	public LinkDocument replaceDocument(String id, ByteString payload) throws Exception {
+		Parser parser = new Parser(id);
+		Core.Response resp = replace(parser.getCollection(), parser.getKey(), payload);
+		if (resp.getPayload().isEmpty()) {
+			throw new PayloadNotFoundException();
+		}
+		return LinkDocument.deserialize(resp.getPayload());
+	}
+
 	public void removeDocument(String id) throws Exception {
 		Parser parser = new Parser(id);
 		remove(parser.getCollection(), parser.getKey());
