@@ -8,11 +8,13 @@ import java.util.UUID;
 import org.apache.flink.statefun.sdk.Address;
 import org.apache.flink.statefun.sdk.Context;
 import org.apache.flink.statefun.sdk.annotations.Persisted;
+import org.apache.flink.statefun.sdk.egress.generated.KafkaProducerRecord;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 import org.apache.flink.statefun.sdk.state.PersistedTable;
 import org.listware.core.utils.ErrorContainer;
 import org.listware.io.functions.result.Egress;
 import org.listware.io.functions.result.EgressReader;
+import org.listware.io.utils.Constants;
 import org.listware.sdk.Functions;
 import org.listware.sdk.Result;
 import org.slf4j.Logger;
@@ -136,14 +138,19 @@ public class Sync {
 
 		if (!replyResult.getIsEgress()) {
 			Address address = replyResult.toAddress();
+
+			TypedValue typedValue = TypedValue.newBuilder().setValue(functionResult.toByteString())
+					.setTypename(Constants.RESULT_MESSAGE_TYPENAME).setHasValue(true).build();
+
 			// send result to caller
-			context.send(address, functionResult);
+			context.send(address, typedValue);
 		} else {
-			// TODO egress from TypedValue to FunctionResult
-			TypedValue newTypedValue = TypedValue.newBuilder().setValue(functionResult.toByteString()).setHasValue(true)
-					.build();
-			// send result to egress
-			context.send(Egress.EGRESS, newTypedValue);
+			KafkaProducerRecord kafkaProducerRecord = KafkaProducerRecord.newBuilder().setTopic(replyResult.getTopic())
+					.setKey(replyResult.getKey()).setValueBytes(functionResult.toByteString()).build();
+
+			TypedValue typedValue = TypedValue.newBuilder().setValue(kafkaProducerRecord.toByteString())
+					.setTypename(Constants.RESULT_MESSAGE_TYPENAME).setHasValue(true).build();
+			context.send(Egress.EGRESS, typedValue);
 		}
 	}
 
