@@ -10,6 +10,7 @@ import org.apache.flink.statefun.sdk.StatefulFunction;
 import org.apache.flink.statefun.sdk.reqreply.generated.TypedValue;
 import org.listware.core.FunctionContext;
 import org.listware.core.cmdb.Cmdb;
+import org.listware.io.utils.Constants;
 import org.listware.sdk.Functions;
 import org.listware.sdk.Result;
 import org.slf4j.Logger;
@@ -32,23 +33,24 @@ public class Base extends Sync implements StatefulFunction {
 
 		try {
 			LOG.debug(context.self().toString());
-
 			if (input instanceof TypedValue) {
 				TypedValue typedValue = (TypedValue) input;
+				if (typedValue.getTypename().equals(Constants.MESSAGE_TYPENAME)) {
+					Functions.FunctionContext functionContext = Functions.FunctionContext
+							.parseFrom(typedValue.getValue());
 
-				Functions.FunctionContext functionContext = Functions.FunctionContext.parseFrom(typedValue.getValue());
-
-				onInit(context, functionContext);
-				invoke(context, functionContext);
-
-			} else if (input instanceof Result.FunctionResult) {
-				Result.FunctionResult functionResult = (Result.FunctionResult) input;
-				onResult(context, functionResult);
+					onInit(context, functionContext);
+					invoke(context, functionContext);
+				} else if (typedValue.getTypename().equals(Constants.RESULT_MESSAGE_TYPENAME)) {
+					Result.FunctionResult functionResult = Result.FunctionResult.parseFrom(typedValue.getValue());
+					onResult(context, functionResult);
+				} else {
+					LOG.error(context.self() + " unknown type received: " + typedValue.getTypename());
+				}
 
 			} else {
 				LOG.error(context.self() + " unknown message received: " + input);
 			}
-
 		} catch (Exception e) {
 			LOG.error(context.self() + " " + e.getLocalizedMessage());
 			onException(context, e.getLocalizedMessage());
