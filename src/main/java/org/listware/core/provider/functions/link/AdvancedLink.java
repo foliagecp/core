@@ -7,6 +7,7 @@ package org.listware.core.provider.functions.link;
 
 import org.apache.flink.statefun.sdk.FunctionType;
 import org.listware.core.FunctionContext;
+import org.listware.core.cmdb.Trigger;
 import org.listware.core.documents.LinkDocument;
 import org.listware.core.utils.exceptions.UnknownMethodException;
 import org.listware.io.utils.Constants.Namespaces;
@@ -41,8 +42,20 @@ public class AdvancedLink extends LinkContext {
 			update(functionContext, message);
 			break;
 
+		case REPLACE:
+			replace(functionContext, message);
+			break;
+
 		case DELETE:
 			delete(functionContext, message);
+			break;
+
+		case CREATE_TRIGGER:
+			createTrigger(functionContext, message);
+			break;
+
+		case DELETE_TRIGGER:
+			deleteTrigger(functionContext, message);
 			break;
 
 		default:
@@ -51,11 +64,17 @@ public class AdvancedLink extends LinkContext {
 	}
 
 	private void update(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
-		LinkDocument document = (LinkDocument) functionContext.getDocument();
-		document.replaceProperties(message.getPayload());
+		LinkDocument document = LinkDocument.deserialize(message.getPayload());
 		document.setId(functionContext.getFlinkContext().self().id());
 
 		document = cmdb.updateLink(functionContext.getFlinkContext(), document);
+	}
+
+	private void replace(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
+		LinkDocument document = LinkDocument.deserialize(message.getPayload());
+		document.setId(functionContext.getFlinkContext().self().id());
+
+		document = cmdb.replaceLink(functionContext.getFlinkContext(), document);
 	}
 
 	private void delete(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
@@ -63,6 +82,28 @@ public class AdvancedLink extends LinkContext {
 		document.setId(functionContext.getFlinkContext().self().id());
 
 		cmdb.removeDocument(document);
+	}
+
+	private void createTrigger(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
+		LinkDocument document = (LinkDocument) functionContext.getDocument();
+
+		Core.Trigger trigger = Core.Trigger.parseFrom(message.getPayload());
+
+		document = Trigger.add(document, trigger);
+		document = cmdb.updateLinkDocument(document);
+
+		LOG.debug("created link trigger " + document.getId());
+	}
+
+	private void deleteTrigger(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
+		LinkDocument document = (LinkDocument) functionContext.getDocument();
+
+		Core.Trigger trigger = Core.Trigger.parseFrom(message.getPayload());
+
+		document = Trigger.delete(document, trigger);
+		document = cmdb.updateLinkDocument(document);
+
+		LOG.debug("deleted type trigger " + document.getId());
 	}
 
 	public static Functions.FunctionContext ProxyMessage(String id, Core.LinkMessage linkMessage,

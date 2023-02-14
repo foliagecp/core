@@ -50,11 +50,15 @@ public class Link extends ObjectContext {
 			break;
 
 		case UPDATE:
-			update(functionContext, message);
+			advanced(functionContext, message);
+			break;
+
+		case REPLACE:
+			advanced(functionContext, message);
 			break;
 
 		case DELETE:
-			delete(functionContext, message);
+			advanced(functionContext, message);
 			break;
 
 		case CREATE_TRIGGER:
@@ -79,19 +83,7 @@ public class Link extends ObjectContext {
 				message.getName(), message.getPayload());
 	}
 
-	private void update(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
-		Result.ReplyResult replyResult = replyResult(functionContext.getFlinkContext());
-
-		LinkDocument document = cmdb.readLinkDocumentByName(functionContext.getDocument().getId(), message.getName());
-
-		Functions.FunctionContext pbFunctionContext = AdvancedLink.ProxyMessage(document.getId(), message, replyResult);
-
-		TypedValue typedValue = TypedValueDeserializer.fromMessageLite(pbFunctionContext);
-
-		functionContext.getFlinkContext().send(AdvancedLink.FUNCTION_TYPE, document.getId(), typedValue);
-	}
-
-	private void delete(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
+	private void advanced(FunctionContext functionContext, Core.LinkMessage message) throws Exception {
 		Result.ReplyResult replyResult = replyResult(functionContext.getFlinkContext());
 
 		LinkDocument document = cmdb.readLinkDocumentByName(functionContext.getDocument().getId(), message.getName());
