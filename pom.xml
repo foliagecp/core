@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.listware</groupId>
 	<artifactId>core</artifactId>
-	<version>0.1.2</version>
+	<version>0.1.3</version>
 	<packaging>jar</packaging>
 
 	<properties>
@@ -89,13 +89,13 @@
 		<dependency>
 			<groupId>org.listware</groupId>
 			<artifactId>io</artifactId>
-			<version>0.1.2</version>
+			<version>0.1.3</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.listware</groupId>
 			<artifactId>proto</artifactId>
-			<version>0.1.2</version>
+			<version>0.1.3</version>
 		</dependency>
 	</dependencies>
 
